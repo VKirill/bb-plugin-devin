@@ -18,6 +18,7 @@ const DISCOVERY: DevinModelDiscovery = {
     { value: "swe-2-medium", name: "SWE-2 Medium" },
     { value: "swe-2-high", name: "SWE-2 High" },
     { value: "swe-2-max", name: "SWE-2 Max" },
+    { value: "swe-2-medium-fast", name: "SWE-2 Medium Fast" },
     { value: "claude-opus-5-medium", name: "Claude Opus 5 Medium" },
     { value: "claude-opus-5-high", name: "Claude Opus 5 High" },
     { value: "claude-opus-5-medium-fast", name: "Claude Opus 5 Medium Fast" },
@@ -88,7 +89,8 @@ describe("devin provider bridge", () => {
     };
     expect(response.id).toBe(1);
     const models = response.result.models;
-    expect(models).toHaveLength(2);
+    // The fake agent also lists glm-5-2 and kimi-k2-6: paid in the Devin CLI, so BB does not offer them.
+    expect(models).toHaveLength(1);
     const swe = models.find((m) => m.id === "swe-2-medium");
     expect(
       swe?.supportedReasoningEfforts.map((e) => e.reasoningEffort),
@@ -179,7 +181,7 @@ describe("devin provider bridge", () => {
   it("rewrites to the fast variant when serviceTier is fast", async () => {
     const { bridge, forwarded } = makeHarness();
     bridge.handleLine(
-      threadStart("claude-opus-5-medium", {
+      threadStart("swe-2-medium", {
         reasoningLevel: "medium",
         serviceTier: "fast",
       }),
@@ -188,9 +190,7 @@ describe("devin provider bridge", () => {
     const forwardedRequest = JSON.parse(forwarded[0]) as {
       params: { options: { model: string } };
     };
-    expect(forwardedRequest.params.options.model).toBe(
-      "claude-opus-5-medium-fast",
-    );
+    expect(forwardedRequest.params.options.model).toBe("swe-2-medium-fast");
   });
 
   it("forwards the line unchanged when resolution is not needed", async () => {

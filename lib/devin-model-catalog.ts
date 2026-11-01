@@ -143,6 +143,21 @@ function familyDisplayName(displayName: string, effortToken?: string): string {
     .trim();
 }
 
+/**
+ * The Devin CLI bills every model except the SWE-2 family per token (`devin models`, 2026-11-01: SWE-2 Medium/High/Max «Free»;
+ * the lightning variants, Adaptive, Fusion leads and every other vendor carry prices). BB offers only the free family, so a
+ * picker or a role table cannot start a paid Devin session by accident (a Gemini audit of 2026-11-01 cost real money).
+ */
+export const FREE_DEVIN_FAMILIES: ReadonlySet<string> = new Set(["swe-2"]);
+
+export function freeDevinModels(
+  options: readonly DevinModelOptionEntry[],
+): DevinModelOptionEntry[] {
+  return options.filter((option) =>
+    FREE_DEVIN_FAMILIES.has(parseDevinVariantUid(option.value).familyKey),
+  );
+}
+
 export function buildDevinModelCatalog(
   modelOptions: readonly DevinModelOptionEntry[],
   currentValue?: string,

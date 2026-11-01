@@ -17,6 +17,7 @@ import {
   resolveDevinVariantUid,
   splitDevinPrimaryModels,
   type DevinModelCatalog,
+  freeDevinModels,
 } from "./lib/devin-model-catalog";
 import {
   hostLaunchSpecDeps,
@@ -139,7 +140,7 @@ export function createDevinProviderBridge(deps: DevinBridgeDeps) {
       return null;
     }
     catalog = buildDevinModelCatalog(
-      discovery.options,
+      freeDevinModels(discovery.options),
       discovery.currentValue,
       discovery.thoughtLevelsByModel,
     );
@@ -162,7 +163,7 @@ export function createDevinProviderBridge(deps: DevinBridgeDeps) {
     let resolvedCatalog = catalog;
     if (catalogKey !== key || !resolvedCatalog) {
       resolvedCatalog = buildDevinModelCatalog(
-        discovery.options,
+        freeDevinModels(discovery.options),
         discovery.currentValue,
         discovery.thoughtLevelsByModel,
       );

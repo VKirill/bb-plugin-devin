@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDevinModelCatalog,
+  freeDevinModels,
   parseDevinVariantUid,
   resolveDevinVariantUid,
   splitDevinPrimaryModels,
@@ -341,5 +342,18 @@ describe("splitDevinPrimaryModels", () => {
     expect(split.selectedOnlyModels).toHaveLength(catalog.models.length - 2);
     expect(split.models.some((m) => m.isDefault)).toBe(true);
     expect(split.selectedOnlyModels.every((m) => !m.isDefault)).toBe(true);
+  });
+});
+
+describe("freeDevinModels", () => {
+  it("keeps only the SWE-2 family: the rest of the Devin catalog bills per token", () => {
+    const options: DevinModelOptionEntry[] = [
+      ...OPTIONS,
+      { value: "swe-2-high-lightning", name: "SWE-2 High Lightning" },
+      { value: "adaptive", name: "Adaptive" },
+      { value: "fusion-claude-opus-5-5-medium-sidekick-swe-2-medium", name: "Fusion" },
+    ];
+    expect(freeDevinModels(options).map((o) => o.value)).toEqual(["swe-2-medium", "swe-2-high", "swe-2-max"]);
+    expect(freeDevinModels([{ value: "gemini-4-argon-medium" }])).toEqual([]);
   });
 });
