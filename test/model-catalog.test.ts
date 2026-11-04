@@ -346,14 +346,15 @@ describe("splitDevinPrimaryModels", () => {
 });
 
 describe("freeDevinModels", () => {
-  it("keeps only the SWE-2 family: the rest of the Devin catalog bills per token", () => {
+  it("keeps only the SWE-2 and SWE-2 Flash families: the rest of the Devin catalog bills per token", () => {
     const options: DevinModelOptionEntry[] = [
       ...OPTIONS,
+      { value: "swe-2-flash-high", name: "SWE-2 Flash High" },
       { value: "swe-2-high-lightning", name: "SWE-2 High Lightning" },
       { value: "adaptive", name: "Adaptive" },
       { value: "fusion-claude-opus-5-5-medium-sidekick-swe-2-medium", name: "Fusion" },
     ];
-    expect(freeDevinModels(options).map((o) => o.value)).toEqual(["swe-2-medium", "swe-2-high", "swe-2-max"]);
+    expect(freeDevinModels(options).map((o) => o.value)).toEqual(["swe-2-medium", "swe-2-high", "swe-2-max", "swe-2-flash-high"]);
     expect(freeDevinModels([{ value: "gemini-4-argon-medium" }])).toEqual([]);
   });
 });
