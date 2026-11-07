@@ -34,6 +34,51 @@ interface DevinBridgeDeps {
     cwd: string,
   ) => Promise<DevinModelDiscovery | null>;
   localizeLaunchSpec?: <T extends DevinAcpLaunchSpec>(spec: T) => T;
+  /** Runs `run` with the inner bridge's stdout lines passed through `rewrite` (null drops a line). */
+  captureOutput?: (rewrite: (line: string) => string | null, run: () => void) => void;
+}
+
+/**
+ * VK core: a thread with a required session policy starts only on a bridge whose initialize declares
+ * `experimental_vkRequiredSessionPolicy: 1` (else `vk_required_session_policy_bridge_unsupported`, every Lane Pilot
+ * writer on Devin since 2026-11-05). The SDK's ACP bridge this plugin wraps predates it. What the core's own ACP bridge
+ * enforces for a generic ACP agent is one thing — the BB skill list without `bbSkillsDenied` — so this wrapper does that
+ * and declares the capability; the core does the rest (plugins, instructions, tools).
+ */
+const VK_REQUIRED_SESSION_POLICY_CAPABILITY = "experimental_vkRequiredSessionPolicy";
+
+interface SkillRootWire {
+  id: string;
+  path: string;
+  skills: Array<{ name: string; description?: string }>;
+}
+
+function deniedBbSkills(providerOptions: Record<string, unknown> | undefined): Set<string> {
+  const policy = providerOptions?.["vkSessionPolicy"];
+  const denied = policy && typeof policy === "object" ? (policy as { bbSkillsDenied?: unknown }).bbSkillsDenied : undefined;
+  return new Set(Array.isArray(denied) ? denied.filter((name): name is string => typeof name === "string") : []);
+}
+
+function captureStdout(rewrite: (line: string) => string | null, run: () => void): void {
+  const write = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+    const out = typeof chunk === "string" ? rewrite(chunk) : chunk;
+    if (out === null) return true;
+    return (write as (...args: unknown[]) => boolean).call(process.stdout, out, ...rest);
+  }) as typeof process.stdout.write;
+  try {
+    run();
+  } finally {
+    process.stdout.write = write;
+  }
+}
+
+function lineId(line: string): unknown {
+  try {
+    return (JSON.parse(line) as { id?: unknown }).id;
+  } catch {
+    return undefined;
+  }
 }
 
 const SESSION_OPTIONS_METHODS = new Set([
@@ -74,6 +119,41 @@ function decodeLaunchSpec(
 export function createDevinProviderBridge(deps: DevinBridgeDeps) {
   const { inner, io, discover } = deps;
   const localize = deps.localizeLaunchSpec;
+  const capture = deps.captureOutput ?? captureStdout;
+  let skillRoots: SkillRootWire[] | null = null;
+  let synthetic = 0;
+
+  function forwardInitialize(request: JsonRpcRequestMessage, line: string): void {
+    capture((out) => {
+      if (lineId(out) !== request.id) return out;
+      const message = JSON.parse(out) as { result?: { capabilities?: Record<string, unknown> } };
+      if (!message.result?.capabilities) return out;
+      message.result.capabilities[VK_REQUIRED_SESSION_POLICY_CAPABILITY] = 1;
+      return `${JSON.stringify(message)}\n`;
+    }, () => inner.handleLine(line));
+  }
+
+  // The inner bridge keeps one skill list for every session and copies it into a session while it starts, before its
+  // first await (SDK 0.4.84 provider-bridge-acp, thread/start). So a session with denied skills starts between a
+  // filtered skills/configure and the full one again, all in one synchronous run; their two answers are dropped.
+  // ponytail: tied to that synchronous copy; move to the core's ACP bridge when the SDK ships it.
+  function forwardSession(line: string, providerOptions: Record<string, unknown> | undefined): void {
+    const denied = deniedBbSkills(providerOptions);
+    if (denied.size === 0 || !skillRoots) {
+      inner.handleLine(line);
+      return;
+    }
+    const filtered = skillRoots.map((root) => ({ ...root, skills: root.skills.filter((skill) => !denied.has(skill.name)) }));
+    const ids = new Set([`devin-vk-skills-${++synthetic}`, `devin-vk-skills-${++synthetic}`]);
+    const [narrowId, restoreId] = [...ids];
+    const configure = (id: string, roots: SkillRootWire[]) =>
+      JSON.stringify({ jsonrpc: "2.0", id, method: "skills/configure", params: { roots } });
+    capture((out) => (ids.has(lineId(out) as string) ? null : out), () => {
+      inner.handleLine(configure(narrowId!, filtered));
+      inner.handleLine(line);
+      inner.handleLine(configure(restoreId!, skillRoots!));
+    });
+  }
 
   // Rewrite server-built launch specs to this host's paths before anything
   // (discovery, the inner ACP bridge, health checks) spawns them.
@@ -187,6 +267,7 @@ export function createDevinProviderBridge(deps: DevinBridgeDeps) {
     request: JsonRpcRequestMessage,
     line: string,
   ): Promise<void> {
+    const sessionOptions = request.params?.options?.providerOptions;
     try {
       const options = request.params?.options;
       const spec = decodeLaunchSpec(
@@ -198,7 +279,7 @@ export function createDevinProviderBridge(deps: DevinBridgeDeps) {
         options.model === undefined ||
         options.model === ACP_DEFAULT_MODEL_ID
       ) {
-        inner.handleLine(line);
+        forwardSession(line, sessionOptions);
         return;
       }
       const resolvedCatalog = await ensureCatalog(
@@ -213,10 +294,10 @@ export function createDevinProviderBridge(deps: DevinBridgeDeps) {
           })
         : undefined;
       if (resolved === undefined || resolved === options.model) {
-        inner.handleLine(line);
+        forwardSession(line, sessionOptions);
         return;
       }
-      inner.handleLine(
+      forwardSession(
         JSON.stringify({
           ...request,
           params: {
@@ -224,9 +305,10 @@ export function createDevinProviderBridge(deps: DevinBridgeDeps) {
             options: { ...options, model: resolved },
           },
         }),
+        sessionOptions,
       );
     } catch {
-      inner.handleLine(line);
+      forwardSession(line, sessionOptions);
     }
   }
 
@@ -244,6 +326,14 @@ export function createDevinProviderBridge(deps: DevinBridgeDeps) {
         return;
       }
       const { request, line: localLine } = localizeRequest(parsed, trimmed);
+      if (request.method === "initialize" && request.id !== undefined) {
+        forwardInitialize(request, localLine);
+        return;
+      }
+      if (request.method === "skills/configure") {
+        const roots = request.params?.["roots"];
+        skillRoots = Array.isArray(roots) ? (roots as SkillRootWire[]) : null;
+      }
       if (request.method === "model/list" && request.id !== undefined) {
         void handleModelList(request, localLine);
         return;
