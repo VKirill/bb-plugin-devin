@@ -40,7 +40,7 @@ export interface DevinModelCatalog {
   familyByVariant: Map<string, DevinModelFamily>;
 }
 
-const TIER_TAILS = ["-fast", "-priority"] as const;
+const TIER_TAILS = ["-fast", "-priority", "-lightning"] as const;
 
 const EFFORT_TOKENS: [string, ReasoningLevel][] = [
   ["extra-high", "xhigh"],
@@ -151,12 +151,19 @@ function familyDisplayName(displayName: string, effortToken?: string): string {
  */
 export const FREE_DEVIN_FAMILIES: ReadonlySet<string> = new Set(["swe-2-1", "swe-2", "swe-2-flash"]);
 
+/**
+ * Families whose paid Ultrafast (`-lightning`) variants sit behind BB's fast toggle: the toggle is an explicit opt-in,
+ * so a paid session never starts without the owner switching it on (owner request 2026-11-25: SWE-2.1 only).
+ */
+export const FAST_TIER_DEVIN_FAMILIES: ReadonlySet<string> = new Set(["swe-2-1"]);
+
 export function freeDevinModels(
   options: readonly DevinModelOptionEntry[],
 ): DevinModelOptionEntry[] {
-  return options.filter((option) =>
-    FREE_DEVIN_FAMILIES.has(parseDevinVariantUid(option.value).familyKey),
-  );
+  return options.filter((option) => {
+    const { familyKey, fast } = parseDevinVariantUid(option.value);
+    return FREE_DEVIN_FAMILIES.has(familyKey) && (!fast || FAST_TIER_DEVIN_FAMILIES.has(familyKey));
+  });
 }
 
 export function buildDevinModelCatalog(

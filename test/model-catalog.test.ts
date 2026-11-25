@@ -346,7 +346,7 @@ describe("splitDevinPrimaryModels", () => {
 });
 
 describe("freeDevinModels", () => {
-  it("keeps only the SWE-2.1, SWE-2 and SWE-2 Flash families: the rest of the Devin catalog bills per token", () => {
+  it("keeps only the SWE-2.1, SWE-2 and SWE-2 Flash families, plus SWE-2.1 Ultrafast for the fast toggle", () => {
     const options: DevinModelOptionEntry[] = [
       ...OPTIONS,
       { value: "swe-2-flash-high", name: "SWE-2 Flash High" },
@@ -358,7 +358,31 @@ describe("freeDevinModels", () => {
       { value: "adaptive", name: "Adaptive" },
       { value: "fusion-claude-opus-5-5-medium-sidekick-swe-2-medium", name: "Fusion" },
     ];
-    expect(freeDevinModels(options).map((o) => o.value)).toEqual(["swe-2-medium", "swe-2-high", "swe-2-max", "swe-2-flash-high", "swe-2-1", "swe-2-1-xhigh"]);
+    expect(freeDevinModels(options).map((o) => o.value)).toEqual(["swe-2-medium", "swe-2-high", "swe-2-max", "swe-2-flash-high", "swe-2-1", "swe-2-1-xhigh", "swe-2-1-xhigh-lightning", "swe-2-1-lightning"]);
     expect(freeDevinModels([{ value: "gemini-4-argon-medium" }])).toEqual([]);
+  });
+});
+
+describe("SWE-2.1 Ultrafast behind the fast toggle", () => {
+  const options = freeDevinModels([
+    { value: "swe-2-1-medium", name: "SWE-2.1 Medium" },
+    { value: "swe-2-1-low", name: "SWE-2.1 Low" },
+    { value: "swe-2-1-xhigh", name: "SWE-2.1 XHigh" },
+    { value: "swe-2-1-low-lightning", name: "SWE-2.1 Ultrafast Low" },
+    { value: "swe-2-1-medium-lightning", name: "SWE-2.1 Ultrafast Medium" },
+    { value: "swe-2-1-xhigh-lightning", name: "SWE-2.1 Ultrafast XHigh" },
+  ]);
+  const catalog = buildDevinModelCatalog(options);
+
+  it("lists one SWE-2.1 model, not a separate Ultrafast entry", () => {
+    expect(catalog.models.map((m) => [m.id, m.displayName])).toEqual([["swe-2-1-medium", "SWE-2.1"]]);
+  });
+
+  it("switches to the lightning variant only when the fast tier is requested", () => {
+    const pick = (reasoningLevel: "low" | "xhigh", serviceTier?: "fast") =>
+      resolveDevinVariantUid(catalog, { model: "swe-2-1-medium", reasoningLevel, serviceTier });
+    expect(pick("xhigh")).toBe("swe-2-1-xhigh");
+    expect(pick("xhigh", "fast")).toBe("swe-2-1-xhigh-lightning");
+    expect(pick("low", "fast")).toBe("swe-2-1-low-lightning");
   });
 });
