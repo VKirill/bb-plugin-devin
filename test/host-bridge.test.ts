@@ -178,7 +178,7 @@ describe("devin provider bridge", () => {
     expect(forwardedRequest.params.options.reasoningLevel).toBe("max");
   });
 
-  it("rewrites to the fast variant when serviceTier is fast", async () => {
+  it("keeps SWE-2 on its free variant when serviceTier is fast: only SWE-2.1 has a paid fast tier", async () => {
     const { bridge, forwarded } = makeHarness();
     bridge.handleLine(
       threadStart("swe-2-medium", {
@@ -190,7 +190,7 @@ describe("devin provider bridge", () => {
     const forwardedRequest = JSON.parse(forwarded[0]) as {
       params: { options: { model: string } };
     };
-    expect(forwardedRequest.params.options.model).toBe("swe-2-medium-fast");
+    expect(forwardedRequest.params.options.model).toBe("swe-2-medium");
   });
 
   it("forwards the line unchanged when resolution is not needed", async () => {
