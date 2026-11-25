@@ -53,7 +53,15 @@ export const devinProvider = {
     { id: "xhigh", label: "Extra High" },
     { id: "max", label: "Max" },
   ],
-  serviceTiers: [{ id: "fast", label: "Fast" }],
+  // BB shows the fast toggle only when there is a choice, as with codex and claude-code (default + fast).
+  serviceTiers: [
+    { id: "default", label: "Default" },
+    {
+      id: "fast",
+      label: "Fast",
+      description: "SWE-2.1 Ultrafast at a paid per-token price; other Devin models stay on their free variant.",
+    },
+  ],
   composerActions: [],
   strings: {
     signInHint:
