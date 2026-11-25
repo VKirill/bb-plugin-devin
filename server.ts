@@ -53,9 +53,7 @@ export const devinProvider = {
     { id: "xhigh", label: "Extra High" },
     { id: "max", label: "Max" },
   ],
-  // BB shows the fast toggle only when there is a choice, as with codex and claude-code (default + fast).
   serviceTiers: [
-    { id: "default", label: "Default" },
     {
       id: "fast",
       label: "Fast",
