@@ -136,7 +136,7 @@ export function createDevinProviderBridge(deps: DevinBridgeDeps) {
   // The inner bridge keeps one skill list for every session and copies it into a session while it starts, before its
   // first await (SDK 0.4.84 provider-bridge-acp, thread/start). So a session with denied skills starts between a
   // filtered skills/configure and the full one again, all in one synchronous run; their two answers are dropped.
-  // ponytail: tied to that synchronous copy; move to the core's ACP bridge when the SDK ships it.
+  // tied to that synchronous copy; move to the core's ACP bridge when the SDK ships it.
   function forwardSession(line: string, providerOptions: Record<string, unknown> | undefined): void {
     const denied = deniedBbSkills(providerOptions);
     if (denied.size === 0 || !skillRoots) {
